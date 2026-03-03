@@ -1,0 +1,172 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Departamentos da empresa
+model Departamento {
+  id        String   @id @default(cuid())
+  nome      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  setores   Setor[]
+}
+
+// Setores dentro dos departamentos
+model Setor {
+  id             String       @id @default(cuid())
+  nome           String
+  departamentoId String
+  departamento   Departamento @relation(fields: [departamentoId], references: [id])
+  colaboradores  Colaborador[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([nome, departamentoId])
+}
+
+// Colaboradores
+model Colaborador {
+  id             String      @id @default(cuid())
+  nome           String
+  funcao         String
+  ativo          Boolean     @default(true)
+  status         String      @default("A") // A = Ativo, I = Inativo, F = Férias
+  nivel          Int         @default(1)
+  setorId        String
+  setor          Setor       @relation(fields: [setorId], references: [id])
+  indicadores    Indicador[]
+  coletas        Coleta[]
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  @@unique([nome])
+}
+
+// Indicadores de meritocracia
+model Indicador {
+  id               String    @id @default(cuid())
+  nome             String
+  medida           String    @default("R$") // R$, %, unidade, etc.
+  frequencia       String    @default("Mensal") // Mensal, Semanal, Diária
+  nivel            Int       @default(1)
+  tipoMeta         String    @default("maior_que") // maior_que (receitas) ou menor_que (custos)
+  bonusMeta        Float     @default(0)
+  bonusSupermeta   Float     @default(0)
+  colaboradorId    String
+  colaborador      Colaborador @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
+  metas            Meta[]
+  coletas          Coleta[]
+  fontesDados      FonteDados[]
+  identificador    String?   @unique // ID único para integração
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+}
+
+// Metas por período
+model Meta {
+  id           String        @id @default(cuid())
+  indicadorId  String
+  indicador    Indicador     @relation(fields: [indicadorId], references: [id], onDelete: Cascade)
+  periodo      String        // Formato: YYYY-MM (ex: 2026-01)
+  mes          Int           // 1-12
+  ano          Int           // ex: 2026
+  meta         Float
+  supermeta    Float
+  versao       Int           @default(1) // Versão atual da meta
+  ativa        Boolean       @default(true) // Se a meta está ativa
+  historico    MetaHistorico[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@unique([indicadorId, periodo])
+}
+
+// Histórico de alterações de metas
+model MetaHistorico {
+  id              String    @id @default(cuid())
+  metaId          String
+  meta            Meta      @relation(fields: [metaId], references: [id], onDelete: Cascade)
+  
+  // Valores anteriores
+  metaAnterior    Float
+  supermetaAnterior Float
+  
+  // Novos valores
+  metaNova        Float
+  supermetaNova   Float
+  
+  // Controle de versão
+  versaoAnterior  Int
+  versaoNova      Int
+  
+  // Informações da alteração
+  dataAlteracao   DateTime  @default(now())
+  motivo          String?   // Motivo da alteração
+  usuario         String?   // Usuário que fez a alteração (se houver autenticação)
+  observacao      String?   // Observações adicionais
+  
+  createdAt       DateTime  @default(now())
+}
+
+// Coletas (valores realizados)
+model Coleta {
+  id              String      @id @default(cuid())
+  indicadorId     String
+  indicador       Indicador   @relation(fields: [indicadorId], references: [id], onDelete: Cascade)
+  colaboradorId   String?
+  colaborador     Colaborador? @relation(fields: [colaboradorId], references: [id])
+  periodo         String      // Formato: YYYY-MM ou descrição
+  mes             Int         // 1-12
+  ano             Int         // ex: 2026
+  dataColeta      DateTime    @default(now())
+  valor           Float
+  comentario      String?
+  atingiuMeta     Boolean     @default(false)
+  atingiuSupermeta Boolean    @default(false)
+  bonusCalculado  Float       @default(0)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@unique([indicadorId, periodo])
+}
+
+// Configurações do sistema
+model Configuracao {
+  id        String   @id @default(cuid())
+  chave     String   @unique
+  valor     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Fontes de dados externas para integração
+model FonteDados {
+  id                String    @id @default(cuid())
+  nome              String    // Nome identificador da fonte
+  descricao         String?   // Descrição opcional
+  url               String    // URL da API
+  metodo            String    @default("GET") // GET, POST, PUT
+  headers           String?   // JSON com headers customizados
+  body              String?   // JSON com body para POST/PUT
+  tipoAutenticacao  String    @default("Nenhuma") // Nenhuma, Bearer, Basic, ApiKey
+  tokenAutenticacao String?   // Token ou credenciais
+  headerAuthName    String?   // Nome do header para API Key (ex: X-API-Key)
+  mapeamento        String?   // JSON com mapeamento de campos da resposta
+  campoValor        String    @default("valor") // Campo da resposta que contém o valor
+  indicadorId       String?   // Vincular a um indicador específico (opcional)
+  indicador         Indicador? @relation(fields: [indicadorId], references: [id], onDelete: SetNull)
+  ativo             Boolean   @default(true)
+  ultimaSincronizacao DateTime?
+  statusUltimaSync  String?   // Sucesso, Erro, etc.
+  mensagemErro      String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+}
