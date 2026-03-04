@@ -162,7 +162,7 @@ export async function GET(request: NextRequest) {
           totalBonus: bonus,
           taxaSucesso: total > 0 ? ((metas / total) * 100) : 0
         };
-      }).sort((a, b) => b.taxiaSucesso - a.taxiaSucesso);
+      }).sort((a, b) => b.taxaSucesso - a.taxaSucesso);
       
       // Performance por setor
       const setores = await db.setor.findMany({
@@ -202,7 +202,7 @@ export async function GET(request: NextRequest) {
     
     // Evolução mensal (últimos 6 meses)
     const hoje = new Date();
-    const meses = [];
+    const meses: Array<{ periodo: string; mesNome: string }> = [];
     for (let i = 5; i >= 0; i--) {
       const data = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
       const mes = data.getMonth() + 1;
@@ -234,11 +234,11 @@ export async function GET(request: NextRequest) {
       });
     }
     
-    // Indicadores com melhor/pior performance
+    // Indicadores com melhor performance
     const indicadores = await db.indicador.findMany({
       include: {
         colaborador: true,
-        coletas: true
+        coletas: periodo ? { where: { periodo } } : true
       }
     });
     
@@ -255,7 +255,7 @@ export async function GET(request: NextRequest) {
         };
       })
       .filter(i => i.totalAvaliacoes >= 3) // Pelo menos 3 avaliações
-      .sort((a, b) => b.taxaSucesso - a.taxiaSucesso)
+      .sort((a, b) => b.taxaSucesso - a.taxaSucesso)
       .slice(0, 5);
     
     // Performance por nível
